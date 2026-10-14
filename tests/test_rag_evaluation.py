@@ -13,7 +13,7 @@ from repolens.rag_evaluation import (
     LiveRecorder,
     ReplayLLM,
     claim_support,
-    fact_accuracy,
+    fact_coverage,
     prompt_key,
     run_rag_evaluation,
 )
@@ -54,11 +54,11 @@ def test_dataset_meets_requirements() -> None:
     assert any(len(q["expected_paths"]) > 1 for q in qs)
 
 
-def test_fact_accuracy() -> None:
+def test_fact_coverage() -> None:
     groups = [["hmac"], ["expir"]]
-    assert fact_accuracy("Uses HMAC and checks expiry.", groups)
-    assert not fact_accuracy("Uses HMAC only.", groups)
-    assert not fact_accuracy("HMAC, expiry; also uses RSA.", groups, forbidden=["rsa"])
+    assert fact_coverage("Uses HMAC and checks expiry.", groups)
+    assert not fact_coverage("Uses HMAC only.", groups)
+    assert not fact_coverage("HMAC, expiry; also uses RSA.", groups, forbidden=["rsa"])
 
 
 def test_claim_support_flags_invented_specifics_not_just_missing_citations() -> None:
@@ -226,3 +226,19 @@ def test_replay_without_recording_exits_cleanly(tmp_path, monkeypatch) -> None:
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 2
+
+
+def test_claim_support_citation_forms() -> None:
+    hit = Hit(TOKENS, 1.0)
+    other = Hit(replace(TOKENS, path="b.py", text="x = 1"), 0.9)
+    hits = [hit, other]
+    ok = "It uses `hmac`"
+    assert claim_support(f"{ok} [1].", hits)["supported"] == 1
+    # grouped: an identifier that only exists in source 2 is checked against both sources
+    assert claim_support("It uses `hmac` and `x` [1, 2].", hits)["supported"] == 1
+    assert claim_support("It uses `x` [1].", hits)["unsupported"] == 1
+    assert claim_support("It uses `x` [2, 1].", hits)["supported"] == 1
+    # invalid / out of range numbers do not count as citations
+    assert claim_support(f"{ok} [7].", hits)["uncited"] == 1
+    assert claim_support(f"{ok} [1, 9].", hits)["supported"] == 1
+    assert claim_support(f"{ok}.", hits)["uncited"] == 1

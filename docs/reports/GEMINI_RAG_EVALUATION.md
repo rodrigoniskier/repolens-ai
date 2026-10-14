@@ -25,13 +25,13 @@ Embedder: **`HashingEmbedder` (lexical, 8192 buckets) - NOT semantic embeddings.
 |---|---|
 | Questions (answerable / unanswerable) | 12 (10 / 2) |
 | Retrieval hit@3 / hit@5 (multi-file needs all files) | 1.00 / 1.00 |
-| Fact coverage, all answerable (n=10) | 0.50 (5/10) |
+| Fact coverage (lexical, not semantic accuracy), all answerable (n=10) | 0.50 (5/10) |
 | Fact coverage among answered (n=5) | 1.00 |
 | False abstention rate | 0.40 (4/10, see below) |
 | Correct abstention on unanswerable (n=2) | 1.00, 0 wrong answers |
 | Structural citation validity (cited ranges match file at commit) | 1.00 (8 cited sources) |
 | Cited source is an expected file | 1.00 |
-| Lexical claim support | 0.89 (8 supported, 1 unsupported, 1 unverifiable; 6 uncited sentences) |
+| Lexical claim support (supported / (supported + unsupported)) | 0.91 (10 supported, 1 unsupported, 2 unverifiable; 3 uncited sentences) |
 | Retrieval latency mean / p95 | ~4-6 ms / ~6-8 ms (varies per run) |
 | Generation latency mean / median / p95 | 4,735 / 1,143 / 23,579 ms |
 | Tokens (prompt / completion) | 8,878 / 623 |
@@ -41,8 +41,8 @@ Embedder: **`HashingEmbedder` (lexical, 8192 buckets) - NOT semantic embeddings.
 - **Three distinct levels**: citation *validity* is structural (the range exists in the file); *claim support* is a lexical check of identifiers/paths/numbers against the cited excerpts; *semantic fidelity* is **not measured** (no judge, no full human review).
 - **Low coverage is mostly a retrieval-gate artifact**: q3, q4, q6, q10 scored below `REPOLENS_MIN_SCORE` (0.25) with the hashing embedder, so they became `insufficient_evidence` without calling the LLM. This reflects the lexical embedder, not Gemini. The threshold was not tuned. A run with semantic embeddings was not done (Codespace memory).
 - q7 was a real model failure: it answered without any citation and was discarded (`no_citations`, 23.6 s latency).
-- Gemini groups citations as `[1, 2]`. The v0.1.0 parser accepted only `[n]` and discarded q8 and q9. This was fixed (grouped citations are parsed and range-checked; regression test added) and the **existing recording was re-scored in replay, with no new API calls**. The pre-fix scoring (coverage 0.30, 3 fallbacks) is superseded.
-- Sentences with LaTeX-style formulas, or answers with one trailing citation, count as "uncited", so claim support for q8/q9 is not informative.
+- Gemini groups citations as `[1, 2]`. The service parser originally accepted only `[n]` and discarded q8 and q9; this was fixed (coverage 0.30 -> 0.50). `claim_support()` still used a `[n]`-only regex, which inflated `uncited` (6) and understated support (0.89). It now reuses the service parser `cited_indexes` (single, grouped, out-of-range and missing citations are regression-tested). Both rescorings used the **existing recording with no new API calls**; earlier figures are superseded.
+- The 3 remaining `uncited` sentences are all in q2 (formula lines without a citation marker), a genuine lack of citation per sentence.
 - n=10 answerable questions over a small fixture: no statistical power.
 
 ## Reproduce offline (no API, no credentials)
@@ -64,7 +64,7 @@ Request shape and Bearer auth; usage/cost parsing (no invented cost); secret-fre
 
 ## Metrics design
 
-Deterministic, no LLM judge: fact coverage (presence of human-written regex fact groups; not polarity-aware, so a contradicting answer can match), lexical claim support (identifiers, paths and numbers in each answer sentence must appear in the cited excerpts), citation validity (cited range must match the file at the commit), abstention rate on unanswerable questions, retrieval/generation latency, tokens, estimated cost. Multi-file questions count as a retrieval hit only when all expected files are in the top-k. Ranking ties beyond the 20-candidate over-fetch are not fully deterministic. Limits: claim support is lexical and can miss subtle misreadings; 12 questions over a small fixture give no statistical power.
+Deterministic, no LLM judge: fact coverage (JSON keys `fact_coverage`; presence of human-written regex fact groups; not polarity-aware, so a contradicting answer can match), lexical claim support (identifiers, paths and numbers in each answer sentence must appear in the cited excerpts), citation validity (cited range must match the file at the commit), abstention rate on unanswerable questions, retrieval/generation latency, tokens, estimated cost. Multi-file questions count as a retrieval hit only when all expected files are in the top-k. Ranking is stable only within the candidate window fetched from ChromaDB (max(k*4, 20)); ties outside it may return different results. No exhaustive retrieval was implemented. Limits: claim support is lexical and can miss subtle misreadings; 12 questions over a small fixture give no statistical power.
 
 ## Reproduce the live run
 

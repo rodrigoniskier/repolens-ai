@@ -87,7 +87,7 @@ export REPOLENS_LLM_INPUT_PRICE_PER_MTOK=0.75 REPOLENS_LLM_OUTPUT_PRICE_PER_MTOK
 `eval/dataset.json` holds 12 hand-written questions over `eval/fixture_repo` (7 single-file, 3 multi-file, 2 unanswerable) with expected files and required facts. Retrieval is scored by hit@3/hit@5 and exact citation validity:
 
 ```bash
-python -m repolens.evaluation --embedder hashing --output eval/results.json   # offline, deterministic (CI)
+python -m repolens.evaluation --embedder hashing --output eval/results.json   # offline, reproducible (CI)
 ```
 
 Measured offline (hashing embedder, committed in `eval/results.json`): 10 answerable questions, **hit@3 = 1.00, hit@5 = 1.00**, citation validity 1.00. This is a lexical baseline on a tiny fixture, not a general quality claim.
@@ -117,7 +117,7 @@ CI (`.github/workflows/ci.yml`) runs lint, tests, the offline eval and a Docker 
 - Only public GitHub repos, default branch, shallow clone; only `.py` and `.md`.
 - Default limits: 300 files, 200 KB per file, 5 MB total (see `.env.example`). Partial indexes are flagged with `truncated`.
 - Secret detection is pattern-based and can miss secrets.
-- Ranking ties beyond the 20-candidate over-fetch are not fully deterministic.
+- Ranking is stable only within the candidate window fetched from ChromaDB (max(k*4, 20)); ties outside it may vary. No exhaustive retrieval is done.
 - Re-ingesting stages a new index generation and switches to it only after success; one embedding model per collection.
 - Similarity threshold (`REPOLENS_MIN_SCORE`, default 0.25) is heuristic and not tuned per model/domain.
 - Evaluation uses a small fixture; generative metrics are lexical (no LLM judge) and the live Gemini result depends on provider availability (see the report).

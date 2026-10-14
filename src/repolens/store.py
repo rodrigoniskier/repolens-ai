@@ -191,8 +191,8 @@ class VectorStore:
                     text=doc,
                 )
                 hits.append(Hit(chunk=chunk, score=1.0 - float(dist)))
-            # Ties come back in arbitrary order, including across the top-k boundary: over-fetch,
-            # then rank deterministically so evaluations are reproducible.
+            # Ties come back in arbitrary order. Over-fetch and sort the candidates to make
+            # ranking stable within that window; ties outside it may still vary (not exhaustive).
             hits.sort(key=lambda h: (-round(h.score, 6), h.chunk.path, h.chunk.start_line))
             return hits[:k]
 

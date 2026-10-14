@@ -37,6 +37,7 @@ from repolens.llm import (
     LLMError,
     OpenAICompatibleClient,
     build_user_prompt,
+    cited_indexes,
 )
 from repolens.models import Chunk, Hit, LLMUsage
 from repolens.service import QueryResult
@@ -70,8 +71,8 @@ def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower())
 
 
-def fact_accuracy(answer: str, groups: list[list[str]], forbidden: list[str] | None = None) -> bool:
-    """True when every fact group has a matching alternative and no forbidden pattern matches."""
+def fact_coverage(answer: str, groups: list[list[str]], forbidden: list[str] | None = None) -> bool:
+    """Lexical coverage (not semantic accuracy): every group matches, no forbidden pattern does."""
     if any(re.search(p, answer, re.IGNORECASE) for p in forbidden or []):
         return False
     return all(any(re.search(p, answer, re.IGNORECASE) for p in group) for group in groups)
@@ -106,7 +107,7 @@ def claim_support(answer: str, hits: list[Hit]) -> dict[str, int]:
     """
     counts = {"supported": 0, "unsupported": 0, "unverifiable": 0, "uncited": 0}
     for sentence in filter(None, (s.strip() for s in _SENTENCE.split(answer))):
-        cited = {int(n) for n in re.findall(r"\[(\d+)\]", sentence) if 1 <= int(n) <= len(hits)}
+        cited = cited_indexes(sentence, len(hits))
         if not cited:
             if _CITATION.sub("", sentence).strip(" -*•#>"):
                 counts["uncited"] += 1
@@ -232,8 +233,8 @@ def _score_question(q: dict, res: QueryResult, root: Path, sha: str) -> dict:
         "answer": res.answer,
     }
     answered = res.status == "answered" and res.answer is not None
-    row["accurate"] = (
-        fact_accuracy(res.answer or "", q.get("required_facts", []), q.get("forbidden"))
+    row["fact_coverage"] = (
+        fact_coverage(res.answer or "", q.get("required_facts", []), q.get("forbidden"))
         if answerable and answered
         else False
         if answerable
@@ -266,9 +267,9 @@ def summarize(rows: list[dict]) -> dict:
             "hit@5": _rate(sum(bool(r["hit@5"]) for r in ans), len(ans)),
         },
         "answers": {
-            "accuracy": _rate(sum(bool(r["accurate"]) for r in ans), len(ans)),
-            "accuracy_among_answered": _rate(
-                sum(bool(r["accurate"]) for r in ans if r["status"] == "answered"),
+            "fact_coverage": _rate(sum(bool(r["fact_coverage"]) for r in ans), len(ans)),
+            "fact_coverage_among_answered": _rate(
+                sum(bool(r["fact_coverage"]) for r in ans if r["status"] == "answered"),
                 sum(r["status"] == "answered" for r in ans),
             ),
             "false_abstention_rate": _rate(
