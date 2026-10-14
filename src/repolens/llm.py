@@ -57,8 +57,11 @@ class OpenAICompatibleClient:
         try:
             resp = httpx.post(self._url, json=payload, headers=headers, timeout=self._timeout)
             resp.raise_for_status()
-            return str(resp.json()["choices"][0]["message"]["content"]).strip()
-        except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
+            content = resp.json()["choices"][0]["message"]["content"]
+            if not isinstance(content, str):
+                raise TypeError("LLM response content is not text.")
+            return content.strip()
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMError(f"LLM request failed: {type(exc).__name__}") from exc
 
 
@@ -67,4 +70,22 @@ _CITATION = re.compile(r"\[(\d+)\]")
 
 def cited_indexes(answer: str, n_sources: int) -> set[int]:
     """Return the valid 1-based source numbers the answer cites."""
-    return {int(m) for m in _CITATION.findall(answer) if 1 <= int(m) <= n_sources}
+    max_digits = len(str(n_sources))
+    indexes = set()
+    for citation in _CITATION.findall(answer):
+        number = citation.lstrip("0") or "0"
+        if len(number) <= max_digits:
+            index = int(number)
+            if 1 <= index <= n_sources:
+                indexes.add(index)
+    return indexes
+
+
+def has_invalid_citations(answer: str, n_sources: int) -> bool:
+    """Return whether any numeric citation falls outside the available source range."""
+    max_digits = len(str(n_sources))
+    for citation in _CITATION.findall(answer):
+        number = citation.lstrip("0") or "0"
+        if len(number) > max_digits or not 1 <= int(number) <= n_sources:
+            return True
+    return False

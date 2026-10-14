@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 
 from repolens.ingest import filters
-from repolens.ingest.github import IngestError, parse_repo_url
+from repolens.ingest.github import (
+    IngestError,
+    RepoRef,
+    _git_env,
+    clone_repository,
+    parse_repo_url,
+)
 from repolens.ingest.scanner import scan_directory
 
 
@@ -31,6 +37,33 @@ def test_parse_repo_url_accepts() -> None:
     ref = parse_repo_url("https://github.com/pallets/click.git")
     assert ref.full_name == "pallets/click"
     assert ref.clone_url == "https://github.com/pallets/click.git"
+
+
+def test_git_environment_disables_global_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "untrusted-gitconfig")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "filter.exploit.clean")
+    env = _git_env()
+    assert env["GIT_CONFIG_GLOBAL"] == "/dev/null"
+    assert env["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert "GIT_CONFIG_KEY_0" not in env
+
+
+def test_clone_rechecks_size_after_git_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FinishedClone:
+        returncode = 0
+
+        def __init__(self, cmd, **_kwargs) -> None:
+            target = Path(cmd[-1])
+            target.mkdir()
+            (target / "oversized.py").write_bytes(b"over limit")
+
+        def poll(self) -> int:
+            return 0
+
+    monkeypatch.setattr("repolens.ingest.github.subprocess.Popen", FinishedClone)
+    with pytest.raises(IngestError, match="clone size"):
+        with clone_repository(RepoRef("owner", "repo"), timeout_seconds=5, max_bytes=1):
+            pytest.fail("oversized clone should not be yielded")
 
 
 def test_filters() -> None:

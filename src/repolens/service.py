@@ -11,7 +11,13 @@ from repolens.chunking import chunk_file
 from repolens.config import Settings
 from repolens.ingest.github import RepoRef, clone_repository, parse_repo_url
 from repolens.ingest.scanner import ScanReport, scan_directory
-from repolens.llm import INSUFFICIENT_TOKEN, LLMClient, LLMError, cited_indexes
+from repolens.llm import (
+    INSUFFICIENT_TOKEN,
+    LLMClient,
+    LLMError,
+    cited_indexes,
+    has_invalid_citations,
+)
 from repolens.models import Hit
 from repolens.store import VectorStore
 
@@ -104,7 +110,15 @@ class RepoLensService:
                 hits,
                 [],
             )
-        if not (generate and self.llm):
+        if not generate:
+            return QueryResult(
+                "retrieval_only",
+                None,
+                "Answer generation disabled: showing the most relevant excerpts only.",
+                hits,
+                [],
+            )
+        if self.llm is None:
             return QueryResult(
                 "retrieval_only",
                 None,
@@ -116,11 +130,19 @@ class RepoLensService:
             answer = self.llm.complete(question, hits)
         except LLMError as exc:
             return QueryResult("retrieval_only", None, f"{exc}. Showing excerpts only.", hits, [])
-        if INSUFFICIENT_TOKEN in answer:
+        if answer.strip() == INSUFFICIENT_TOKEN:
             return QueryResult(
                 "insufficient_evidence",
                 None,
                 "The model judged the retrieved excerpts insufficient to answer.",
+                hits,
+                [],
+            )
+        if has_invalid_citations(answer, len(hits)):
+            return QueryResult(
+                "retrieval_only",
+                None,
+                "The generated answer had out-of-range citations and was discarded.",
                 hits,
                 [],
             )

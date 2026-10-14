@@ -70,6 +70,7 @@ def _git_env() -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k in {"PATH", "HOME", "LANG", "SSL_CERT_FILE"}}
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
     return env
 
 
@@ -116,6 +117,8 @@ def clone_repository(
             time.sleep(0.25)
         if proc.returncode != 0:
             raise IngestError("Could not clone the repository (is it public and does it exist?).")
+        if _dir_size(target) > max_bytes:
+            raise IngestError("Repository exceeds the allowed clone size.")
         sha = head_commit(target)
         if sha is None:
             raise IngestError("Could not determine the commit SHA.")

@@ -60,6 +60,10 @@ def test_openapi_and_ui(client: TestClient) -> None:
     assert {"/health", "/ingest", "/query"} <= set(paths)
     page = client.get("/")
     assert page.status_code == 200 and "RepoLens AI" in page.text
+    assert '<label for="repo-url" class="visually-hidden">' in page.text
+    assert '<label for="question" class="visually-hidden">' in page.text
+    assert '<label for="repo-filter" class="visually-hidden">' in page.text
+    assert 'for="repo-url" hidden' not in page.text
 
 
 def test_openai_compatible_client(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
@@ -88,9 +92,45 @@ def test_openai_compatible_client(monkeypatch: pytest.MonkeyPatch, settings: Set
         OpenAICompatibleClient(settings).complete("q", [])
 
 
+@pytest.mark.parametrize(
+    "response",
+    [
+        {},
+        {"choices": None},
+        {"choices": []},
+        {"choices": [None]},
+        {"choices": [{"message": None}]},
+        {"choices": [{"message": {}}]},
+        {"choices": [{"message": {"content": None}}]},
+    ],
+)
+def test_openai_client_rejects_incomplete_json(
+    monkeypatch: pytest.MonkeyPatch, settings: Settings, response: dict
+) -> None:
+    settings = settings.model_copy(update={"llm_model": "m"})
+    monkeypatch.setattr(
+        httpx,
+        "post",
+        lambda *_args, **_kwargs: httpx.Response(
+            200,
+            json=response,
+            request=httpx.Request("POST", "https://example.invalid"),
+        ),
+    )
+    with pytest.raises(LLMError, match="LLM request failed"):
+        OpenAICompatibleClient(settings).complete("q", [])
+
+
 def test_llm_disabled_without_model(settings: Settings) -> None:
     assert not settings.llm_enabled
     assert settings.model_copy(update={"llm_model": "x"}).llm_enabled
+
+
+def test_settings_validate_chunk_overlap(settings: Settings) -> None:
+    with pytest.raises(ValueError, match="chunk_overlap must be smaller"):
+        Settings(chunk_lines=5, chunk_overlap=5, _env_file=None)
+    valid = Settings(chunk_lines=5, chunk_overlap=4, _env_file=None)
+    assert valid.chunk_overlap < valid.chunk_lines
 
 
 def test_evaluation_report_is_deterministic_and_real() -> None:

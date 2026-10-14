@@ -1,13 +1,15 @@
 """Citation helpers: GitHub permalinks and verification against a local checkout."""
 
 from pathlib import Path
+from urllib.parse import quote
 
 from repolens.models import Chunk
 
 
 def permalink(chunk: Chunk) -> str:
+    path = quote(chunk.path, safe="/")
     return (
-        f"https://github.com/{chunk.repo}/blob/{chunk.commit}/{chunk.path}"
+        f"https://github.com/{chunk.repo}/blob/{chunk.commit}/{path}"
         f"#L{chunk.start_line}-L{chunk.end_line}"
     )
 

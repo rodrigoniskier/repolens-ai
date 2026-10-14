@@ -90,7 +90,7 @@ CI (`.github/workflows/ci.yml`) runs lint, tests, the offline eval and a Docker 
 
 ### Security
 
-- Imported code is never executed: only `git clone` runs, with hooks disabled (`core.hooksPath=/dev/null`), symlinks disabled, only HTTPS to github.com, a clean environment, timeout and size cap. Files are only read as UTF-8 text.
+- Imported code is never executed: only `git clone` runs, with hooks and global/system Git configuration disabled, symlinks disabled, only HTTPS to github.com, a clean environment, timeout and size cap. Files are only read as UTF-8 text.
 - Skipped: `.git`, `node_modules`, venvs, `vendor`, build output, `.env*`, key/cert files, files matching common secret patterns (private keys, AWS, GitHub, Slack, OpenAI-style tokens), binaries, non-UTF-8, symlinks, oversized files.
 - Retrieved text is sent to the LLM as untrusted data; the system prompt forbids following instructions inside it. This reduces, but does not eliminate, prompt-injection risk.
 - No API keys are bundled; `.env` is git-ignored.
@@ -101,7 +101,7 @@ CI (`.github/workflows/ci.yml`) runs lint, tests, the offline eval and a Docker 
 - Only public GitHub repos, default branch, shallow clone; only `.py` and `.md`.
 - Default limits: 300 files, 200 KB per file, 5 MB total (see `.env.example`). Partial indexes are flagged with `truncated`.
 - Secret detection is pattern-based and can miss secrets.
-- Re-ingesting a repo replaces its index; one embedding model per collection.
+- Re-ingesting stages a new index generation and switches to it only after success; one embedding model per collection.
 - Similarity threshold (`REPOLENS_MIN_SCORE`, default 0.25) is heuristic and not tuned per model/domain.
 - Evaluation covers retrieval on a small fixture only; answer quality with an LLM is not measured.
 - Verification of citations in the API relies on the stored commit; permalinks require the commit to exist upstream.
@@ -156,7 +156,7 @@ O CI roda lint, testes, avaliação offline e build do Docker em cada Pull Reque
 
 ### Segurança
 
-- Código importado nunca é executado: apenas `git clone` raso, sem hooks, sem symlinks, somente HTTPS para github.com, com timeout e limite de tamanho. Arquivos são lidos apenas como texto UTF-8.
+- Código importado nunca é executado: apenas `git clone` raso, sem hooks nem configuração Git global/do sistema, sem symlinks, somente HTTPS para github.com, com timeout e limite de tamanho. Arquivos são lidos apenas como texto UTF-8.
 - Ignorados: `.git`, dependências, `.env*`, chaves/certificados, padrões comuns de segredos, binários, symlinks e arquivos grandes.
 - Trechos recuperados são enviados ao LLM como dados não confiáveis; isso reduz, mas não elimina, o risco de prompt injection.
 - Nenhuma chave é incluída; `.env` está no `.gitignore`.
@@ -167,6 +167,7 @@ O CI roda lint, testes, avaliação offline e build do Docker em cada Pull Reque
 - Apenas repositórios públicos do GitHub (branch padrão), arquivos `.py` e `.md`.
 - Limites padrão: 300 arquivos, 200 KB por arquivo, 5 MB no total; índices parciais são sinalizados com `truncated`.
 - A detecção de segredos é por padrões e pode falhar.
+- Uma reindexação só substitui a geração ativa quando a nova geração está completa.
 - O limiar de similaridade (padrão 0,25) é heurístico.
 - A avaliação cobre só a recuperação em um fixture pequeno; a qualidade das respostas do LLM não é medida.
 
