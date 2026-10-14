@@ -26,7 +26,7 @@ Request shape and Bearer auth; usage/cost parsing (no invented cost); secret-fre
 
 ## Metrics design
 
-Deterministic, no LLM judge: fact accuracy (human-written regex fact groups), lexical claim support (identifiers, paths and numbers in each answer sentence must appear in the cited excerpts), citation validity (cited range must match the file at the commit), abstention rate on unanswerable questions, retrieval/generation latency, tokens, estimated cost. Limits: claim support is lexical and can miss subtle misreadings; 12 questions over a small fixture give no statistical power.
+Deterministic, no LLM judge: fact coverage (presence of human-written regex fact groups; not polarity-aware, so a contradicting answer can match), lexical claim support (identifiers, paths and numbers in each answer sentence must appear in the cited excerpts), citation validity (cited range must match the file at the commit), abstention rate on unanswerable questions, retrieval/generation latency, tokens, estimated cost. Multi-file questions count as a retrieval hit only when all expected files are in the top-k. Ranking ties beyond the 20-candidate over-fetch are not fully deterministic. Limits: claim support is lexical and can miss subtle misreadings; 12 questions over a small fixture give no statistical power.
 
 ## Reproduce the live run later
 

@@ -119,6 +119,12 @@ def test_live_call_budget_is_a_hard_cap() -> None:
     assert provider.calls == 3 == live.calls
     skipped = [r for r in report["per_question"] if r["llm_error"] == "budget"]
     assert skipped and all(r["status"] == "retrieval_only" for r in skipped)
+    replay = ReplayLLM({"model": "m", "entries": live.entries, "reasoning_effort": ""})
+    again = run_rag_evaluation(HashingEmbedder(), replay)
+    assert replay.misses == 0
+    assert [r["llm_error"] for r in again["per_question"]] == [
+        r["llm_error"] for r in report["per_question"]
+    ]
 
 
 @pytest.mark.parametrize("kind", ["http_429", "http_401"])
@@ -139,7 +145,10 @@ def test_live_run_halts_after_quota_or_auth_failure(kind: str) -> None:
     assert kind in errors and "aborted" in errors
     # Provider errors degrade to retrieval-only, never to fabricated answers.
     assert all(r["answer"] is None for r in report["per_question"])
-    assert ReplayLLM({"model": "m", "entries": live.entries, "reasoning_effort": ""}).misses == 0
+    replay = ReplayLLM({"model": "m", "entries": live.entries, "reasoning_effort": ""})
+    again = run_rag_evaluation(HashingEmbedder(), replay)
+    assert replay.misses == 0
+    assert {r["llm_error"] for r in again["per_question"]} == errors
 
 
 def test_pacing_waits_between_calls() -> None:
@@ -184,3 +193,36 @@ def test_prompt_key_ignores_commit_sha() -> None:
     assert prompt_key("q", HITS, "m", "low") == prompt_key("q", other, "m", "low")
     changed = [replace(h, chunk=replace(h.chunk, text="different")) for h in HITS]
     assert prompt_key("q", HITS, "m", "low") != prompt_key("q", changed, "m", "low")
+
+
+def test_multi_file_hit_requires_all_expected_files() -> None:
+    from repolens.evaluation import _hit
+
+    q = {"kind": "multi_file"}
+    expected = {"a.py", "b.py"}
+    assert _hit(q, expected, ["a.py", "x.py"]) is False
+    assert _hit(q, expected, ["a.py", "b.py"]) is True
+    assert _hit({"kind": "single"}, {"a.py"}, ["x", "a.py"]) is True
+
+
+def test_replay_without_recording_exits_cleanly(tmp_path, monkeypatch) -> None:
+    import sys
+
+    from repolens.rag_evaluation import main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "x",
+            "--mode",
+            "replay",
+            "--embedder",
+            "hashing",
+            "--recording",
+            str(tmp_path / "no.json"),
+        ],
+    )
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2

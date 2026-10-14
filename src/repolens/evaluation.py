@@ -57,6 +57,14 @@ def load_questions(eval_dir: Path = DEFAULT_EVAL_DIR) -> list[dict]:
     return json.loads((eval_dir / "dataset.json").read_text("utf-8"))["questions"]
 
 
+def _hit(q: dict, expected: set[str], top: list[str]) -> bool | None:
+    if not expected:
+        return None
+    if q.get("kind") == "multi_file":
+        return expected <= set(top)
+    return any(p in expected for p in top)
+
+
 def run_evaluation(embedder: Embedder, eval_dir: Path = DEFAULT_EVAL_DIR, k: int = 3) -> dict:
     """Retrieval metrics. hit@k only counts answerable questions (those with expected paths)."""
     questions = load_questions(eval_dir)
@@ -72,8 +80,8 @@ def run_evaluation(embedder: Embedder, eval_dir: Path = DEFAULT_EVAL_DIR, k: int
             rows.append(
                 {
                     "id": q["id"],
-                    "hit": any(p in expected for p in paths[:k]) if expected else None,
-                    "hit@5": any(p in expected for p in paths[:5]) if expected else None,
+                    "hit": _hit(q, expected, paths[:k]),
+                    "hit@5": _hit(q, expected, paths[:5]),
                     "latency_ms": round(latency_ms, 2),
                     "citations": len(hits),
                     "valid_citations": sum(verify_citation(root, h.chunk, sha) for h in hits),

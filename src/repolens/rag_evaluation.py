@@ -23,7 +23,13 @@ from pathlib import Path
 from repolens.citations import verify_citation
 from repolens.config import Settings
 from repolens.embeddings import Embedder, HashingEmbedder, SentenceTransformerEmbedder
-from repolens.evaluation import DEFAULT_EVAL_DIR, FIXTURE_REPO, fixture_service, load_questions
+from repolens.evaluation import (
+    DEFAULT_EVAL_DIR,
+    FIXTURE_REPO,
+    _hit,
+    fixture_service,
+    load_questions,
+)
 from repolens.llm import (
     SYSTEM_PROMPT,
     Completion,
@@ -138,14 +144,16 @@ class LiveRecorder:
         self.entries: dict[str, dict] = {}
 
     def complete(self, question: str, hits: list[Hit]) -> Completion:
+        key = prompt_key(question, hits, self._model, self._effort)
         if self._halt:
+            self.entries[key] = {"error": "aborted"}
             raise LLMError(f"LLM call skipped after {self._halt}", kind="aborted")
         if self.calls >= self._max_calls:
+            self.entries[key] = {"error": "budget"}
             raise LLMError("LLM call budget exhausted", kind="budget")
         wait = self._min_interval - (time.monotonic() - self._last)
         if self.calls and wait > 0:
             self._sleep(wait)
-        key = prompt_key(question, hits, self._model, self._effort)
         self.calls += 1
         self._last = time.monotonic()
         try:
@@ -213,8 +221,8 @@ def _score_question(q: dict, res: QueryResult, root: Path, sha: str) -> dict:
         "answerable": answerable,
         "status": res.status,
         "llm_error": res.llm_error,
-        "hit@3": any(p in expected for p in paths[:3]) if expected else None,
-        "hit@5": any(p in expected for p in paths[:5]) if expected else None,
+        "hit@3": _hit(q, expected, paths[:3]),
+        "hit@5": _hit(q, expected, paths[:5]),
         "retrieval_ms": res.retrieval_ms,
         "generation_ms": res.llm_usage.latency_ms if res.llm_usage else None,
         "prompt_tokens": res.llm_usage.prompt_tokens if res.llm_usage else 0,
@@ -393,6 +401,10 @@ def main() -> None:
         args.recording.parent.mkdir(parents=True, exist_ok=True)
         args.recording.write_text(json.dumps(recording, indent=2) + "\n", encoding="utf-8")
     else:
+        if not args.recording.exists():
+            parser.error(
+                f"no recording at {args.recording}; run with --mode live --allow-live first"
+            )
         recording = _load_recording(args.recording)
         if recording.get("embedder") != embedder.name:
             parser.error(

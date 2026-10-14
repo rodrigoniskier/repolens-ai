@@ -76,7 +76,7 @@ export REPOLENS_LLM_API_KEY=...                  # e.g. a Codespaces secret; nev
 export REPOLENS_LLM_INPUT_PRICE_PER_MTOK=0.75 REPOLENS_LLM_OUTPUT_PRICE_PER_MTOK=3.75
 ```
 
-- Answers must cite retrieved excerpts as `[n]`; citations are verified against the file at the indexed commit, and answers without valid citations are discarded.
+- Answers must cite retrieved excerpts as `[n]`; the service checks that each `[n]` refers to a retrieved excerpt (answers without one are discarded); the evaluation harness additionally verifies cited ranges against the file at the indexed commit.
 - If the provider fails (e.g. HTTP 503, timeout), `/query` falls back to `retrieval_only` (semantic retrieval with sources) and reports `llm.error`.
 - `/query` returns `retrieval_ms` and `llm` (model, prompt/completion/total tokens, latency, estimated cost). The `repolens.llm` logger records the same, never request bodies or keys.
 - Repository text is untrusted: delimiters are neutralized, paths escaped, and the prompt forbids following instructions in excerpts (reduces, does not eliminate, injection risk).
@@ -92,7 +92,7 @@ python -m repolens.evaluation --embedder hashing --output eval/results.json   # 
 
 Measured offline (hashing embedder, committed in `eval/results.json`): 10 answerable questions, **hit@3 = 1.00, hit@5 = 1.00**, citation validity 1.00. This is a lexical baseline on a tiny fixture, not a general quality claim.
 
-Generative evaluation (`python -m repolens.rag_evaluation`) measures fact accuracy against human-written fact patterns, lexical claim support against cited excerpts, citation validity, abstention, latency, tokens and estimated cost, without an LLM judge. Live runs need `--allow-live` and a hard call cap (`--max-calls`, default 12); responses are recorded for offline `--mode replay`. See [docs/reports/GEMINI_RAG_EVALUATION.md](docs/reports/GEMINI_RAG_EVALUATION.md) for the status of the live run.
+Generative evaluation (`python -m repolens.rag_evaluation`) measures fact coverage (presence of human-written fact patterns; it is not polarity-aware, so a contradicting answer can still match), lexical claim support against cited excerpts, citation validity, abstention, latency, tokens and estimated cost, without an LLM judge. Live runs need `--allow-live` and a hard call cap (`--max-calls`, default 12); responses are recorded for offline `--mode replay`. See [docs/reports/GEMINI_RAG_EVALUATION.md](docs/reports/GEMINI_RAG_EVALUATION.md) for the status of the live run.
 
 ### Tests and lint
 
@@ -117,6 +117,7 @@ CI (`.github/workflows/ci.yml`) runs lint, tests, the offline eval and a Docker 
 - Only public GitHub repos, default branch, shallow clone; only `.py` and `.md`.
 - Default limits: 300 files, 200 KB per file, 5 MB total (see `.env.example`). Partial indexes are flagged with `truncated`.
 - Secret detection is pattern-based and can miss secrets.
+- Ranking ties beyond the 20-candidate over-fetch are not fully deterministic.
 - Re-ingesting stages a new index generation and switches to it only after success; one embedding model per collection.
 - Similarity threshold (`REPOLENS_MIN_SCORE`, default 0.25) is heuristic and not tuned per model/domain.
 - Evaluation uses a small fixture; generative metrics are lexical (no LLM judge) and the live Gemini result depends on provider availability (see the report).
@@ -156,7 +157,7 @@ Abra <http://localhost:8000> (interface) ou <http://localhost:8000/docs> (OpenAP
 
 Configure `REPOLENS_LLM_BASE_URL`, `REPOLENS_LLM_MODEL` e `REPOLENS_LLM_API_KEY` para qualquer endpoint compatível com OpenAI. Exemplo Gemini: base `https://generativelanguage.googleapis.com/v1beta/openai/`, modelo `gemini-3.8-flash`, `REPOLENS_LLM_REASONING_EFFORT=low` (enviado só se definido). A chave vem de variável de ambiente (ex.: Codespaces Secret) e nunca deve ser commitada.
 
-- Respostas devem citar `[n]`; as citações são verificadas contra o arquivo no commit indexado e respostas sem citação válida são descartadas.
+- Respostas devem citar `[n]`; o serviço confere que cada `[n]` aponta para um trecho recuperado (respostas sem isso são descartadas) e a avaliação verifica os intervalos contra o arquivo no commit indexado.
 - Se o provedor falhar (ex.: HTTP 503, timeout), `/query` volta para `retrieval_only` (recuperação semântica com fontes) e informa `llm.error`.
 - `/query` devolve `retrieval_ms` e `llm` (modelo, tokens, latência, custo estimado); o logger `repolens.llm` registra o mesmo, sem corpo de requisição nem chaves.
 - Custos são estimativas pelos preços configurados (`REPOLENS_LLM_INPUT_PRICE_PER_MTOK`/`OUTPUT`); no Free Tier a cobrança é $0. O nível de faturamento não é consultável pela API.
@@ -166,7 +167,7 @@ Configure `REPOLENS_LLM_BASE_URL`, `REPOLENS_LLM_MODEL` e `REPOLENS_LLM_API_KEY`
 
 `eval/dataset.json` tem 12 perguntas escritas à mão sobre `eval/fixture_repo` (7 de um arquivo, 3 multiarquivo, 2 sem evidência), com arquivos e fatos esperados. Medido offline (embedder hashing, `eval/results.json`): 10 perguntas respondíveis, **hit@3 = 1,00, hit@5 = 1,00**, validade das citações 1,00 — baseline lexical em fixture pequeno, não uma afirmação geral de qualidade.
 
-A avaliação generativa (`python -m repolens.rag_evaluation`) mede acurácia por fatos escritos à mão, suporte lexical das afirmações, validade das citações, abstenção, latência, tokens e custo estimado, sem LLM como juiz. Chamadas reais exigem `--allow-live` e limite rígido (`--max-calls`, padrão 12); as respostas são gravadas para `--mode replay` offline. Veja [docs/reports/GEMINI_RAG_EVALUATION.md](docs/reports/GEMINI_RAG_EVALUATION.md).
+A avaliação generativa (`python -m repolens.rag_evaluation`) mede cobertura de fatos escritos à mão (presença de padrões; não detecta negação), suporte lexical das afirmações, validade das citações, abstenção, latência, tokens e custo estimado, sem LLM como juiz. Chamadas reais exigem `--allow-live` e limite rígido (`--max-calls`, padrão 12); as respostas são gravadas para `--mode replay` offline. Veja [docs/reports/GEMINI_RAG_EVALUATION.md](docs/reports/GEMINI_RAG_EVALUATION.md).
 
 ### Testes
 

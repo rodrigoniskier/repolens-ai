@@ -6,16 +6,16 @@
   "hit@5": 1.0,
   "citation_validity": 1.0,
   "latency_ms": {
-    "mean": 4.67,
-    "median": 4.31,
-    "max": 8.03
+    "mean": 5.1,
+    "median": 5.05,
+    "max": 7.33
   },
   "per_question": [
     {
       "id": "q1",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 8.03,
+      "latency_ms": 7.33,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -28,7 +28,7 @@
       "id": "q2",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 4.45,
+      "latency_ms": 4.78,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -41,7 +41,7 @@
       "id": "q3",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 3.71,
+      "latency_ms": 4.4,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -54,7 +54,7 @@
       "id": "q4",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 3.8,
+      "latency_ms": 3.92,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -67,7 +67,7 @@
       "id": "q5",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 3.79,
+      "latency_ms": 4.02,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -80,7 +80,7 @@
       "id": "q6",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 3.79,
+      "latency_ms": 6.59,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -93,7 +93,7 @@
       "id": "q7",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 4.54,
+      "latency_ms": 5.07,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -106,7 +106,7 @@
       "id": "q8",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 4.69,
+      "latency_ms": 5.14,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -119,7 +119,7 @@
       "id": "q9",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 6.04,
+      "latency_ms": 5.09,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -132,7 +132,7 @@
       "id": "q10",
       "hit": true,
       "hit@5": true,
-      "latency_ms": 5.08,
+      "latency_ms": 5.18,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -145,7 +145,7 @@
       "id": "q11",
       "hit": null,
       "hit@5": null,
-      "latency_ms": 3.91,
+      "latency_ms": 5.04,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
@@ -158,7 +158,7 @@
       "id": "q12",
       "hit": null,
       "hit@5": null,
-      "latency_ms": 4.17,
+      "latency_ms": 4.62,
       "citations": 5,
       "valid_citations": 5,
       "top_paths": [
