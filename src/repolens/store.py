@@ -33,7 +33,7 @@ class VectorStore:
     def _doc(chunk: Chunk) -> str:
         return f"{chunk.path}\n{chunk.text}"
 
-    def _load_active_generations(self) -> dict[str, str | None]:
+    def _load_active_generations(self) -> dict[str, str]:
         metadata = self._col.metadata or {}
         encoded = metadata.get(_ACTIVE_GENERATIONS)
         if encoded is not None:
@@ -44,29 +44,56 @@ class VectorStore:
                 for repo, generation in active.items()
             ):
                 raise ValueError("Invalid active-generation metadata in the vector index.")
-            return active
-
-        records = self._col.get(include=["metadatas"])
-        active = {str(meta["repo"]): None for meta in records["metadatas"] or []}
+        else:
+            records = self._col.get(include=["metadatas"])
+            active = {str(meta["repo"]): None for meta in records["metadatas"] or []}
+        active = self._migrate_legacy_generations(active)
         self._save_active_generations(active)
         return active
 
-    def _save_active_generations(self, active: dict[str, str | None]) -> None:
+    def _migrate_legacy_generations(self, active: dict[str, str | None]) -> dict[str, str]:
+        migrated: dict[str, str] = {}
+        for repo, generation in active.items():
+            if generation is not None:
+                migrated[repo] = generation
+                continue
+            records = self._col.get(where={"repo": {"$eq": repo}}, include=["metadatas"])
+            legacy_records = [
+                (record_id, metadata)
+                for record_id, metadata in zip(
+                    records["ids"], records["metadatas"] or [], strict=True
+                )
+                if "generation" not in metadata
+            ]
+            if not legacy_records:
+                continue
+            legacy_generation = uuid.uuid4().hex
+            self._col.update(
+                ids=[record_id for record_id, _metadata in legacy_records],
+                metadatas=[
+                    {**metadata, "generation": legacy_generation}
+                    for _record_id, metadata in legacy_records
+                ],
+            )
+            migrated[repo] = legacy_generation
+        return migrated
+
+    def _save_active_generations(self, active: dict[str, str]) -> None:
         metadata = dict(self._col.metadata or {})
         metadata.pop("hnsw:space", None)
         metadata[_ACTIVE_GENERATIONS] = json.dumps(active, sort_keys=True, separators=(",", ":"))
         self._col.modify(metadata=metadata)
 
     @staticmethod
-    def _generation_filter(repo: str, generation: str | None) -> dict[str, Any]:
-        conditions: list[dict[str, Any]] = [{"repo": {"$eq": repo}}]
-        if generation is not None:
-            conditions.append({"generation": {"$eq": generation}})
-        if len(conditions) == 1:
-            return conditions[0]
-        return {"$and": conditions}
+    def _generation_filter(repo: str, generation: str) -> dict[str, Any]:
+        return {
+            "$and": [
+                {"repo": {"$eq": repo}},
+                {"generation": {"$eq": generation}},
+            ]
+        }
 
-    def _active_filter(self, repos: dict[str, str | None]) -> dict[str, Any]:
+    def _active_filter(self, repos: dict[str, str]) -> dict[str, Any]:
         conditions = [
             self._generation_filter(repo, generation) for repo, generation in repos.items()
         ]
