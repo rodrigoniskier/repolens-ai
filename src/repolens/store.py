@@ -57,6 +57,7 @@ class VectorStore:
             if generation is not None:
                 migrated[repo] = generation
                 continue
+            legacy_generation = f"legacy-{uuid.uuid5(uuid.NAMESPACE_URL, repo).hex}"
             records = self._col.get(where={"repo": {"$eq": repo}}, include=["metadatas"])
             legacy_records = [
                 (record_id, metadata)
@@ -65,17 +66,21 @@ class VectorStore:
                 )
                 if "generation" not in metadata
             ]
-            if not legacy_records:
+            if legacy_records:
+                self._col.update(
+                    ids=[record_id for record_id, _metadata in legacy_records],
+                    metadatas=[
+                        {**metadata, "generation": legacy_generation}
+                        for _record_id, metadata in legacy_records
+                    ],
+                )
+                migrated[repo] = legacy_generation
                 continue
-            legacy_generation = uuid.uuid4().hex
-            self._col.update(
-                ids=[record_id for record_id, _metadata in legacy_records],
-                metadatas=[
-                    {**metadata, "generation": legacy_generation}
-                    for _record_id, metadata in legacy_records
-                ],
-            )
-            migrated[repo] = legacy_generation
+            if any(
+                metadata.get("generation") == legacy_generation
+                for metadata in records["metadatas"] or []
+            ):
+                migrated[repo] = legacy_generation
         return migrated
 
     def _save_active_generations(self, active: dict[str, str]) -> None:
