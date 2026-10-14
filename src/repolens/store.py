@@ -173,7 +173,7 @@ class VectorStore:
             )
             res = self._col.query(
                 query_embeddings=self._embedder.embed([query]),
-                n_results=min(k, collection_count),
+                n_results=min(max(k * 4, 20), collection_count),
                 where=self._active_filter(active),
                 include=["documents", "metadatas", "distances"],
             )
@@ -191,7 +191,10 @@ class VectorStore:
                     text=doc,
                 )
                 hits.append(Hit(chunk=chunk, score=1.0 - float(dist)))
-            return hits
+            # Ties come back in arbitrary order. Over-fetch and sort the candidates to make
+            # ranking stable within that window; ties outside it may still vary (not exhaustive).
+            hits.sort(key=lambda h: (-round(h.score, 6), h.chunk.path, h.chunk.start_line))
+            return hits[:k]
 
     @property
     def embedder_name(self) -> str:

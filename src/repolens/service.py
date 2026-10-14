@@ -1,6 +1,7 @@
 """Orchestrates ingestion and querying."""
 
 import threading
+import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -13,12 +14,13 @@ from repolens.ingest.github import RepoRef, clone_repository, parse_repo_url
 from repolens.ingest.scanner import ScanReport, scan_directory
 from repolens.llm import (
     INSUFFICIENT_TOKEN,
+    Completion,
     LLMClient,
     LLMError,
     cited_indexes,
     has_invalid_citations,
 )
-from repolens.models import Hit
+from repolens.models import Hit, LLMUsage
 from repolens.store import VectorStore
 
 AnswerStatus = Literal["answered", "retrieval_only", "insufficient_evidence"]
@@ -43,6 +45,9 @@ class QueryResult:
     message: str
     hits: list[Hit]
     cited: list[int]
+    retrieval_ms: float = 0.0
+    llm_usage: LLMUsage | None = None
+    llm_error: str | None = None
 
 
 class RepoLensService:
@@ -101,60 +106,74 @@ class RepoLensService:
     def query(
         self, question: str, *, top_k: int = 5, repo: str | None = None, generate: bool = True
     ) -> QueryResult:
+        start = time.perf_counter()
         hits = self.store.search(question, top_k, repo)
-        if not hits or hits[0].score < self.settings.min_score:
+        retrieval_ms = round((time.perf_counter() - start) * 1000, 2)
+
+        def result(status: AnswerStatus, answer: str | None, message: str, **extra) -> QueryResult:
+            cited = extra.pop("cited", [])
             return QueryResult(
+                status, answer, message, hits, cited, retrieval_ms=retrieval_ms, **extra
+            )
+
+        if not hits or hits[0].score < self.settings.min_score:
+            return result(
                 "insufficient_evidence",
                 None,
                 "Insufficient evidence: no indexed excerpt is similar enough to the question.",
-                hits,
-                [],
             )
         if not generate:
-            return QueryResult(
+            return result(
                 "retrieval_only",
                 None,
                 "Answer generation disabled: showing the most relevant excerpts only.",
-                hits,
-                [],
             )
         if self.llm is None:
-            return QueryResult(
+            return result(
                 "retrieval_only",
                 None,
                 "No LLM configured: showing the most relevant excerpts only.",
-                hits,
-                [],
             )
         try:
-            answer = self.llm.complete(question, hits)
+            completion = self.llm.complete(question, hits)
         except LLMError as exc:
-            return QueryResult("retrieval_only", None, f"{exc}. Showing excerpts only.", hits, [])
+            return result(
+                "retrieval_only",
+                None,
+                f"{exc}. Falling back to semantic retrieval: showing excerpts only.",
+                llm_error=exc.kind,
+            )
+        if isinstance(completion, str):
+            completion = Completion(completion)
+        answer, usage = completion.text, completion.usage
         if answer.strip() == INSUFFICIENT_TOKEN:
-            return QueryResult(
+            return result(
                 "insufficient_evidence",
                 None,
                 "The model judged the retrieved excerpts insufficient to answer.",
-                hits,
-                [],
+                llm_usage=usage,
             )
         if has_invalid_citations(answer, len(hits)):
-            return QueryResult(
+            return result(
                 "retrieval_only",
                 None,
                 "The generated answer had out-of-range citations and was discarded.",
-                hits,
-                [],
+                llm_usage=usage,
+                llm_error="invalid_citations",
             )
         cited = sorted(cited_indexes(answer, len(hits)))
         if not cited:
-            return QueryResult(
+            return result(
                 "retrieval_only",
                 None,
                 "The generated answer had no valid citations and was discarded.",
-                hits,
-                [],
+                llm_usage=usage,
+                llm_error="no_citations",
             )
-        return QueryResult(
-            "answered", answer, "Answer generated from the cited excerpts.", hits, cited
+        return result(
+            "answered",
+            answer,
+            "Answer generated from the cited excerpts.",
+            cited=cited,
+            llm_usage=usage,
         )

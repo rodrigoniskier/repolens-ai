@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,20 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_api_key: str = ""
     llm_timeout_seconds: float = 60.0
+    # Optional: "minimal", "low", "medium" or "high" (sent as reasoning_effort when set).
+    llm_reasoning_effort: str = ""
+    llm_max_output_tokens: int = Field(2048, ge=16)
+    # Paid-tier USD prices per 1M tokens, used only to ESTIMATE cost (unset -> no estimate).
+    llm_input_price_per_mtok: float | None = Field(None, ge=0.0)
+    llm_output_price_per_mtok: float | None = Field(None, ge=0.0)
+
+    @field_validator("llm_reasoning_effort")
+    @classmethod
+    def validate_reasoning_effort(cls, value: str) -> str:
+        value = value.strip().lower()
+        if value not in {"", "none", "minimal", "low", "medium", "high"}:
+            raise ValueError("llm_reasoning_effort must be none, minimal, low, medium or high.")
+        return value
 
     @model_validator(mode="after")
     def validate_chunk_overlap(self) -> "Settings":

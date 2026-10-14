@@ -79,7 +79,7 @@ def test_openai_compatible_client(monkeypatch: pytest.MonkeyPatch, settings: Set
         )
 
     monkeypatch.setattr(httpx, "post", fake_post)
-    assert OpenAICompatibleClient(settings).complete("q", []) == "hi [1]"
+    assert OpenAICompatibleClient(settings).complete("q", []).text == "hi [1]"
     assert seen["url"].endswith("/chat/completions")
     assert seen["headers"]["Authorization"] == "Bearer k"
     assert seen["payload"]["temperature"] == 0

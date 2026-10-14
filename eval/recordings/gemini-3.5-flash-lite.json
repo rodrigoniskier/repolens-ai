@@ -1,0 +1,85 @@
+{
+  "model": "gemini-3.5-flash-lite",
+  "embedder": "hashing-8192",
+  "reasoning_effort": "",
+  "recorded_at": "2026-10-14T14:48:12+00:00",
+  "entries": {
+    "9d3ebe1b78678a03af612d60f91d85d9d7c6591883ec12741c652f40b2a93e62": {
+      "text": "To verify the session token signature, the token is split into the encoded payload and the signature using `token.partition(\".\")` [1]. The payload is decoded from base64, and an expected HMAC signature is computed using the provided secret and the payload with SHA-256 (`hmac.new(secret, payload, hashlib.sha256).hexdigest()`) [1]. This expected signature is then securely compared against the token's signature using `hmac.compare_digest(signature, expected)`; if they do not match, a `ValueError(\"invalid token signature\")` is raised [1].\n\nThe token expires when the current time (`time.time()`) exceeds the expiry timestamp embedded within the token payload (`int(expires) < time.time()`), which raises a `TokenExpiredError(user_id)` [1]. By default, tokens are created with a time-to-live (`ttl_seconds`) of 3600 seconds (1 hour) [1].",
+      "usage": {
+        "model": "gemini-3.5-flash-lite",
+        "prompt_tokens": 1281,
+        "completion_tokens": 209,
+        "total_tokens": 1490,
+        "latency_ms": 1216.4,
+        "estimated_cost_usd": null
+      }
+    },
+    "08cdf36b8c150e960d0a3648f528cbe65d6bfb7c0fe696d2697d44681808a1ca": {
+      "text": "The final invoice total is computed by taking the subtotal, subtracting any bulk discount, and then multiplying the net amount by `(1 + TAX_RATE)`, with the final result rounded to 2 decimal places [2]. \n\nSpecifically, the calculation is:\n$$\\text{net} = \\text{subtotal}(\\text{items}) - \\text{bulk\\_discount}(\\text{items})$$\n$$\\text{invoice\\_total} = \\text{round}(\\text{net} \\times (1 + \\text{TAX\\_RATE}), 2)$$ \n\nwhere `TAX_RATE` is `0.08` [2].",
+      "usage": {
+        "model": "gemini-3.5-flash-lite",
+        "prompt_tokens": 1278,
+        "completion_tokens": 134,
+        "total_tokens": 1412,
+        "latency_ms": 4927.4,
+        "estimated_cost_usd": null
+      }
+    },
+    "1038cbbb25c01a559a1de3a3858a4acbfaef3f8798c7b84eadab11de5c9c4368": {
+      "text": "The `retry_with_backoff` function in `utils/retry.py` calls the operation inside a loop for a specified number of attempts (defaulting to 5) [1]. If an `OSError` is raised, it checks if it is the final attempt; if not, it doubles the wait time based on the `base_delay` (defaulting to 0.5) and the current attempt number (`delay = base_delay * (2**attempt)`), adds random jitter, and sleeps for that duration before retrying [1]. If all attempts fail, it raises the exception [1].",
+      "usage": {
+        "model": "gemini-3.5-flash-lite",
+        "prompt_tokens": 1344,
+        "completion_tokens": 128,
+        "total_tokens": 1472,
+        "latency_ms": 1142.8,
+        "estimated_cost_usd": null
+      }
+    },
+    "b540e4832e09c83ef77616bae544ab77090db1bc449ef5bd12195997a0d9e7bd": {
+      "text": "The production database is configured with `ACME_DATABASE_URL`, and the log level is controlled by `ACME_LOG_LEVEL`.",
+      "usage": {
+        "model": "gemini-3.5-flash-lite",
+        "prompt_tokens": 1279,
+        "completion_tokens": 29,
+        "total_tokens": 1308,
+        "latency_ms": 23578.8,
+        "estimated_cost_usd": null
+      }
+    },
+    "92589376570f8d3f2f1811fae7f02c2f82b1acead0f75c1f5b0a837d79d83f21": {
+      "text": "The `auth/tokens.py` module issues and validates signed session tokens [1, 2].",
+      "usage": {
+        "model": "gemini-3.5-flash-lite",
+        "prompt_tokens": 1276,
+        "completion_tokens": 21,
+        "total_tokens": 1297,
+        "latency_ms": 731.5,
+        "estimated_cost_usd": null
+      }
+    },
+    "ce50a4dd0b8d951a38ce8f7d8f496b857333653ef80e8ed64c5fd0bd43b55ddf": {
+      "text": "The cache uses a least-recently-used (LRU) eviction policy, which evicts the oldest entry when the capacity is exceeded [2, 3]. \n\nThe retry helper computes the delay between attempts by doubling the wait time each time using exponential backoff with a base delay ($base\\_delay \\times 2^{{attempt}}$), and adds random jitter using `random.uniform(0, delay / 10)` [1, 2].",
+      "usage": {
+        "model": "gemini-3.5-flash-lite",
+        "prompt_tokens": 1138,
+        "completion_tokens": 95,
+        "total_tokens": 1233,
+        "latency_ms": 870.7,
+        "estimated_cost_usd": null
+      }
+    },
+    "9cf8b7aacfe3d6e04d8f5526ffd26e17a0b2ae1c89bb4ab40d371a938a24cd8a": {
+      "text": "INSUFFICIENT_EVIDENCE",
+      "usage": {
+        "model": "gemini-3.5-flash-lite",
+        "prompt_tokens": 1282,
+        "completion_tokens": 7,
+        "total_tokens": 1289,
+        "latency_ms": 677.7,
+        "estimated_cost_usd": null
+      }
+    }
+  }
+}

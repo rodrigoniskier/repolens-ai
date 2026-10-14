@@ -16,7 +16,7 @@ from repolens.embeddings import SentenceTransformerEmbedder
 from repolens.ingest.github import IngestError
 from repolens.llm import OpenAICompatibleClient
 from repolens.models import Hit
-from repolens.service import RepoLensService
+from repolens.service import QueryResult, RepoLensService
 from repolens.store import VectorStore
 
 
@@ -66,11 +66,25 @@ class Source(BaseModel):
     cited: bool = False
 
 
+class LLMInfo(BaseModel):
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    latency_ms: float | None = None
+    estimated_cost_usd: float | None = Field(
+        None, description="Estimate at configured paid-tier prices; not an invoice."
+    )
+    error: str | None = Field(None, description="Why generation fell back to retrieval, if so.")
+
+
 class QueryResponse(BaseModel):
     status: Literal["answered", "retrieval_only", "insufficient_evidence"]
     answer: str | None = Field(None, description="Only set when an LLM produced a cited answer.")
     message: str
     sources: list[Source]
+    retrieval_ms: float = 0.0
+    llm: LLMInfo | None = None
 
 
 class RepoInfo(BaseModel):
@@ -93,6 +107,13 @@ def _source(n: int, hit: Hit, cited: bool) -> Source:
         text=c.text,
         cited=cited,
     )
+
+
+def _llm_info(result: QueryResult) -> LLMInfo | None:
+    if result.llm_usage is None and result.llm_error is None:
+        return None
+    info = asdict(result.llm_usage) if result.llm_usage else {}
+    return LLMInfo(**info, error=result.llm_error)
 
 
 def build_service(settings: Settings) -> RepoLensService:
@@ -158,6 +179,8 @@ def create_app(service: RepoLensService | None = None) -> FastAPI:
             answer=result.answer,
             message=result.message,
             sources=[_source(i, h, i in result.cited) for i, h in enumerate(result.hits, 1)],
+            retrieval_ms=result.retrieval_ms,
+            llm=_llm_info(result),
         )
 
     return app
