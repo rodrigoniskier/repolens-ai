@@ -148,14 +148,19 @@ class OpenAICompatibleClient:
         )
 
 
-_CITATION = re.compile(r"\[(\d+)\]")
+_CITATION_GROUP = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def _citation_numbers(answer: str) -> list[str]:
+    """Numbers from `[1]` and grouped `[1, 2]` citations (Gemini groups them)."""
+    return [n.strip() for group in _CITATION_GROUP.findall(answer) for n in group.split(",")]
 
 
 def cited_indexes(answer: str, n_sources: int) -> set[int]:
     """Return the valid 1-based source numbers the answer cites."""
     max_digits = len(str(n_sources))
     indexes = set()
-    for citation in _CITATION.findall(answer):
+    for citation in _citation_numbers(answer):
         number = citation.lstrip("0") or "0"
         if len(number) <= max_digits:
             index = int(number)
@@ -167,7 +172,7 @@ def cited_indexes(answer: str, n_sources: int) -> set[int]:
 def has_invalid_citations(answer: str, n_sources: int) -> bool:
     """Return whether any numeric citation falls outside the available source range."""
     max_digits = len(str(n_sources))
-    for citation in _CITATION.findall(answer):
+    for citation in _citation_numbers(answer):
         number = citation.lstrip("0") or "0"
         if len(number) > max_digits or not 1 <= int(number) <= n_sources:
             return True

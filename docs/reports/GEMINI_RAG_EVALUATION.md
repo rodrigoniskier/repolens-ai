@@ -1,24 +1,62 @@
-# Gemini 3.8 Flash — Generative RAG Evaluation (v0.2.0)
+# Gemini Generative RAG Evaluation (v0.2.0)
 
-**Status: the live generative evaluation was NOT executed. No generative metrics are reported, because none were measured.**
+## Summary
 
-## What happened (verified)
-
-| Step | Result |
+| Model | Result |
 |---|---|
-| Key access check (`GET .../v1beta/openai/models`, no generation) | HTTP 200; `models/gemini-3.8-flash` is listed |
-| Smoke call #1 (`--smoke --allow-live`) | HTTP 503 Service Unavailable |
-| Smoke call #2 (after 45 s) | HTTP 503 |
-| Smoke call #3 (after 90 s) | HTTP 503 |
-| Evaluation calls (up to 12 authorized) | **0 made** — the smoke call never succeeded, so the evaluation budget was left untouched |
+| `gemini-3.8-flash` (default target) | **Not validated**: 3 smoke calls returned HTTP 503 (provider side). Remains configurable. |
+| `gemini-3.5-flash-lite` | **Validated live** on the same OpenAI-compatible endpoint, without `reasoning_effort`. |
 
-- API calls that generated content: 0 successful, 3 failed with 503 (server side, not auth/quota). Failed calls return no usage data; no tokens are known and no cost can be attributed. The 503 responses are not expected to be billable, but this was not verifiable.
-- Billing tier: **could not be determined** (the API exposes no billing information). Published pricing for 3.8 Flash Standard: Free Tier free of charge; Paid $0.75 in / $3.75 out per 1M tokens (thinking tokens billed as output). The user explicitly authorized the capped live run (1 smoke + ≤12 calls, estimated worst case well under $0.10). Billing settings were not touched.
-- Untested live: whether the endpoint accepts `reasoning_effort: low` and `max_tokens` (the request never got past the 503). The offline tests only verify the request shape.
+## API calls and billing (verified)
 
-## Measured without the provider (offline, reproducible)
+- Key present (53 chars, never printed); `GET .../openai/models` -> 200, both models listed.
+- `gemini-3.8-flash`: 3 calls, 3x HTTP 503, no usage data.
+- `gemini-3.5-flash-lite` smoke: 1 successful call (137 prompt / 12 completion tokens, 813 ms, text `TAX_RATE is 0.08 [1].`). One earlier attempt never reached the API (local env mistake).
+- `gemini-3.5-flash-lite` evaluation: 12 questions, **7 real calls, all HTTP 200** (4 questions were rejected by the similarity threshold before any LLM call; 1 call returned `INSUFFICIENT_EVIDENCE`). Budget authorized: 12.
+- Total successful generation calls: 8. Evaluation tokens: 8,878 prompt + 623 completion = 9,501.
+- **Billing tier could not be confirmed** (the API exposes no billing data); the user explicitly authorized the capped run. **Cost: not estimated** - no list price for this model was found and none is invented (`estimated_cost_usd` is null). On the Free Tier the charge is $0.
+- `max_tokens` was sent and accepted. `reasoning_effort` was deliberately omitted for this model and remains untested live.
 
-`python -m repolens.evaluation --embedder hashing` over 12 questions (10 answerable, 2 unanswerable): hit@3 = 1.00, hit@5 = 1.00, citation validity = 1.00, retrieval latency mean 4.67 ms (`eval/results.json`). This is a lexical baseline on a tiny fixture. Retrieval with the real embedding model was not re-measured for the 12-question set (the process was killed by the memory-limited Codespace).
+## Live results: `gemini-3.5-flash-lite`, hashing embedder
+
+Embedder: **`HashingEmbedder` (lexical, 8192 buckets) - NOT semantic embeddings.** These numbers must not be read as results with real semantic embeddings. Recording: `eval/recordings/gemini-3.5-flash-lite.json`.
+
+| Metric | Value |
+|---|---|
+| Questions (answerable / unanswerable) | 12 (10 / 2) |
+| Retrieval hit@3 / hit@5 (multi-file needs all files) | 1.00 / 1.00 |
+| Fact coverage, all answerable (n=10) | 0.50 (5/10) |
+| Fact coverage among answered (n=5) | 1.00 |
+| False abstention rate | 0.40 (4/10, see below) |
+| Correct abstention on unanswerable (n=2) | 1.00, 0 wrong answers |
+| Structural citation validity (cited ranges match file at commit) | 1.00 (8 cited sources) |
+| Cited source is an expected file | 1.00 |
+| Lexical claim support | 0.89 (8 supported, 1 unsupported, 1 unverifiable; 6 uncited sentences) |
+| Retrieval latency mean / p95 | ~4-6 ms / ~6-8 ms (varies per run) |
+| Generation latency mean / median / p95 | 4,735 / 1,143 / 23,579 ms |
+| Tokens (prompt / completion) | 8,878 / 623 |
+
+### Reading the numbers honestly
+
+- **Three distinct levels**: citation *validity* is structural (the range exists in the file); *claim support* is a lexical check of identifiers/paths/numbers against the cited excerpts; *semantic fidelity* is **not measured** (no judge, no full human review).
+- **Low coverage is mostly a retrieval-gate artifact**: q3, q4, q6, q10 scored below `REPOLENS_MIN_SCORE` (0.25) with the hashing embedder, so they became `insufficient_evidence` without calling the LLM. This reflects the lexical embedder, not Gemini. The threshold was not tuned. A run with semantic embeddings was not done (Codespace memory).
+- q7 was a real model failure: it answered without any citation and was discarded (`no_citations`, 23.6 s latency).
+- Gemini groups citations as `[1, 2]`. The v0.1.0 parser accepted only `[n]` and discarded q8 and q9. This was fixed (grouped citations are parsed and range-checked; regression test added) and the **existing recording was re-scored in replay, with no new API calls**. The pre-fix scoring (coverage 0.30, 3 fallbacks) is superseded.
+- Sentences with LaTeX-style formulas, or answers with one trailing citation, count as "uncited", so claim support for q8/q9 is not informative.
+- n=10 answerable questions over a small fixture: no statistical power.
+
+## Reproduce offline (no API, no credentials)
+
+```bash
+python -m repolens.rag_evaluation --mode replay --embedder hashing \
+  --recording eval/recordings/gemini-3.5-flash-lite.json
+```
+
+Replay serves the recorded answers and refuses (`replay_miss`) if the prompt changed. Generation latency and tokens are the recorded ones; retrieval latency is re-measured. CI runs this step.
+
+## Retrieval-only offline baseline
+
+`python -m repolens.evaluation --embedder hashing`: 12 questions, hit@3 = hit@5 = 1.00, citation validity 1.00 (`eval/results.json`).
 
 ## Pipeline verified by tests (no network, no cost)
 
@@ -28,12 +66,12 @@ Request shape and Bearer auth; usage/cost parsing (no invented cost); secret-fre
 
 Deterministic, no LLM judge: fact coverage (presence of human-written regex fact groups; not polarity-aware, so a contradicting answer can match), lexical claim support (identifiers, paths and numbers in each answer sentence must appear in the cited excerpts), citation validity (cited range must match the file at the commit), abstention rate on unanswerable questions, retrieval/generation latency, tokens, estimated cost. Multi-file questions count as a retrieval hit only when all expected files are in the top-k. Ranking ties beyond the 20-candidate over-fetch are not fully deterministic. Limits: claim support is lexical and can miss subtle misreadings; 12 questions over a small fixture give no statistical power.
 
-## Reproduce the live run later
+## Reproduce the live run
 
 ```bash
 export REPOLENS_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-export REPOLENS_LLM_MODEL=gemini-3.8-flash REPOLENS_LLM_REASONING_EFFORT=low
+export REPOLENS_LLM_MODEL=gemini-3.5-flash-lite   # or gemini-3.8-flash when available
 python -m repolens.rag_evaluation --smoke --allow-live
-python -m repolens.rag_evaluation --mode live --embedder model --allow-live --max-calls 12 --output eval/results-gemini-live.json
-python -m repolens.rag_evaluation --mode replay --embedder model   # offline replay of the recording
+python -m repolens.rag_evaluation --mode live --embedder hashing --allow-live --max-calls 12 \
+  --recording eval/recordings/gemini-3.5-flash-lite.json
 ```

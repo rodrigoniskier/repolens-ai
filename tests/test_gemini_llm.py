@@ -199,3 +199,12 @@ def test_fallback_to_retrieval_on_provider_failure_and_usage_surfaces(
             "estimated_cost_usd": 0.001,
             "error": None,
         }
+
+
+def test_grouped_citations_are_parsed_and_range_checked() -> None:
+    from repolens.llm import cited_indexes, has_invalid_citations
+
+    assert cited_indexes("Both files [1, 2] and [3].", 3) == {1, 2, 3}
+    assert not has_invalid_citations("see [1, 2]", 2)
+    assert has_invalid_citations("see [1, 9]", 2)
+    assert cited_indexes("no citation [x, 1]", 2) == set()

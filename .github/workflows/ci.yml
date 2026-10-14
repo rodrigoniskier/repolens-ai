@@ -28,6 +28,8 @@ jobs:
         run: pytest -q
       - name: Deterministic retrieval eval
         run: python -m repolens.evaluation --embedder hashing --output eval/results-hashing.json
+      - name: Generative eval replay (recorded Gemini answers, no API calls)
+        run: python -m repolens.rag_evaluation --mode replay --embedder hashing --recording eval/recordings/gemini-3.5-flash-lite.json --output eval/results-gemini-replay.json
       - uses: actions/upload-artifact@v4
         with:
           name: eval-report

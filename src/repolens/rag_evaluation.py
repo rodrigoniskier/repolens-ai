@@ -44,7 +44,7 @@ from repolens.service import QueryResult
 DEFAULT_RECORDING = DEFAULT_EVAL_DIR / "recordings" / "gemini-3.8-flash.json"
 ABORT_KINDS = {"http_401", "http_403", "http_404", "http_429"}
 
-_CITATION = re.compile(r"\[\d+\]")
+_CITATION = re.compile(r"\[\d+(?:\s*,\s*\d+)*\]")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 _ANCHORS = re.compile(
     r"`([^`]+)`"  # backticked code
