@@ -22,3 +22,15 @@ class Chunk:
 class Hit:
     chunk: Chunk
     score: float
+
+
+@dataclass(frozen=True, slots=True)
+class LLMUsage:
+    """Observability data for one LLM call. Cost is an estimate at paid-tier list prices."""
+
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    latency_ms: float
+    estimated_cost_usd: float | None

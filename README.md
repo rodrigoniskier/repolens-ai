@@ -63,20 +63,36 @@ curl -X POST localhost:8000/query -H 'content-type: application/json' \
 - `POST /query` – `{"question", "top_k", "repo", "generate"}`; returns `status` (`answered`, `retrieval_only`, `insufficient_evidence`), optional `answer`, and `sources` (path, lines, commit, score, permalink, text).
 - `GET /repos` – indexed repositories.
 
-### Optional LLM
+### Optional LLM (v0.2.0: Gemini)
 
-Set `REPOLENS_LLM_MODEL` (and `REPOLENS_LLM_BASE_URL` / `REPOLENS_LLM_API_KEY` if needed) for any OpenAI-compatible `/chat/completions` endpoint, e.g. a local Ollama. Without a model, `/query` returns the retrieved excerpts and sources only; no answer is ever simulated. A generated answer without a valid `[n]` citation is discarded. If the best match scores below `REPOLENS_MIN_SCORE` or the model replies that evidence is insufficient, the status is `insufficient_evidence`.
+Set `REPOLENS_LLM_MODEL` (and `REPOLENS_LLM_BASE_URL` / `REPOLENS_LLM_API_KEY`) for any OpenAI-compatible `/chat/completions` endpoint. Gemini example:
+
+```bash
+export REPOLENS_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+export REPOLENS_LLM_MODEL=gemini-3.8-flash
+export REPOLENS_LLM_REASONING_EFFORT=low        # sent only when set; leave empty for other providers
+export REPOLENS_LLM_API_KEY=...                  # e.g. a Codespaces secret; never commit it
+# optional, enables cost *estimates* only (USD per 1M tokens):
+export REPOLENS_LLM_INPUT_PRICE_PER_MTOK=0.75 REPOLENS_LLM_OUTPUT_PRICE_PER_MTOK=3.75
+```
+
+- Answers must cite retrieved excerpts as `[n]`; citations are verified against the file at the indexed commit, and answers without valid citations are discarded.
+- If the provider fails (e.g. HTTP 503, timeout), `/query` falls back to `retrieval_only` (semantic retrieval with sources) and reports `llm.error`.
+- `/query` returns `retrieval_ms` and `llm` (model, prompt/completion/total tokens, latency, estimated cost). The `repolens.llm` logger records the same, never request bodies or keys.
+- Repository text is untrusted: delimiters are neutralized, paths escaped, and the prompt forbids following instructions in excerpts (reduces, does not eliminate, injection risk).
+- Costs are estimates at the configured list prices; the Free Tier is billed at $0. Billing tier cannot be read via the API.
 
 ### Evaluation
 
-`eval/dataset.json` holds 8 hand-written questions with expected source files over `eval/fixture_repo`; no generated answers are used as ground truth. Each run commits the fixture to a throwaway git repo, indexes it, and measures hit@3, retrieval latency and whether each cited range matches the file at the cited commit exactly.
+`eval/dataset.json` holds 12 hand-written questions over `eval/fixture_repo` (7 single-file, 3 multi-file, 2 unanswerable) with expected files and required facts. Retrieval is scored by hit@3/hit@5 and exact citation validity:
 
 ```bash
-python -m repolens.evaluation --embedder model --output eval/results.json   # real model
-python -m repolens.evaluation --embedder hashing                            # offline lexical baseline (CI)
+python -m repolens.evaluation --embedder hashing --output eval/results.json   # offline, deterministic (CI)
 ```
 
-Measured results (committed in `eval/results.json`, CPU, all-MiniLM-L6-v2, 8 questions): **hit@3 = 1.00**, **citation validity = 1.00**, retrieval latency mean 17.05 ms / median 16.07 ms / max 22.16 ms. The set is tiny and the fixture easy, so this is a smoke-level regression check, not a general quality claim. Re-run to reproduce; latency varies by machine.
+Measured offline (hashing embedder, committed in `eval/results.json`): 10 answerable questions, **hit@3 = 1.00, hit@5 = 1.00**, citation validity 1.00. This is a lexical baseline on a tiny fixture, not a general quality claim.
+
+Generative evaluation (`python -m repolens.rag_evaluation`) measures fact accuracy against human-written fact patterns, lexical claim support against cited excerpts, citation validity, abstention, latency, tokens and estimated cost, without an LLM judge. Live runs need `--allow-live` and a hard call cap (`--max-calls`, default 12); responses are recorded for offline `--mode replay`. See [docs/reports/GEMINI_RAG_EVALUATION.md](docs/reports/GEMINI_RAG_EVALUATION.md) for the status of the live run.
 
 ### Tests and lint
 
@@ -103,7 +119,7 @@ CI (`.github/workflows/ci.yml`) runs lint, tests, the offline eval and a Docker 
 - Secret detection is pattern-based and can miss secrets.
 - Re-ingesting stages a new index generation and switches to it only after success; one embedding model per collection.
 - Similarity threshold (`REPOLENS_MIN_SCORE`, default 0.25) is heuristic and not tuned per model/domain.
-- Evaluation covers retrieval on a small fixture only; answer quality with an LLM is not measured.
+- Evaluation uses a small fixture; generative metrics are lexical (no LLM judge) and the live Gemini result depends on provider availability (see the report).
 - Verification of citations in the API relies on the stored commit; permalinks require the commit to exist upstream.
 
 ---
@@ -136,13 +152,21 @@ Abra <http://localhost:8000> (interface) ou <http://localhost:8000/docs> (OpenAP
 3. Pergunte "How does click prompt for a hidden password?" e confira as fontes (arquivo, linhas, commit, link permanente).
 4. Pergunte algo sem relação (ex.: receita de bolo): a resposta é `insufficient_evidence`.
 
-### LLM opcional
+### LLM opcional (v0.2.0: Gemini)
 
-Defina `REPOLENS_LLM_MODEL` (e `REPOLENS_LLM_BASE_URL` / `REPOLENS_LLM_API_KEY`, se necessário) para qualquer endpoint `/chat/completions` compatível com OpenAI, como o Ollama local. Sem modelo configurado, `/query` devolve apenas trechos e fontes; nenhuma resposta é simulada. Respostas sem citação `[n]` válida são descartadas. Se a melhor correspondência ficar abaixo de `REPOLENS_MIN_SCORE`, ou o modelo indicar evidência insuficiente, o status é `insufficient_evidence`.
+Configure `REPOLENS_LLM_BASE_URL`, `REPOLENS_LLM_MODEL` e `REPOLENS_LLM_API_KEY` para qualquer endpoint compatível com OpenAI. Exemplo Gemini: base `https://generativelanguage.googleapis.com/v1beta/openai/`, modelo `gemini-3.8-flash`, `REPOLENS_LLM_REASONING_EFFORT=low` (enviado só se definido). A chave vem de variável de ambiente (ex.: Codespaces Secret) e nunca deve ser commitada.
+
+- Respostas devem citar `[n]`; as citações são verificadas contra o arquivo no commit indexado e respostas sem citação válida são descartadas.
+- Se o provedor falhar (ex.: HTTP 503, timeout), `/query` volta para `retrieval_only` (recuperação semântica com fontes) e informa `llm.error`.
+- `/query` devolve `retrieval_ms` e `llm` (modelo, tokens, latência, custo estimado); o logger `repolens.llm` registra o mesmo, sem corpo de requisição nem chaves.
+- Custos são estimativas pelos preços configurados (`REPOLENS_LLM_INPUT_PRICE_PER_MTOK`/`OUTPUT`); no Free Tier a cobrança é $0. O nível de faturamento não é consultável pela API.
+- Trechos do repositório são dados não confiáveis (delimitadores neutralizados, instruções ignoradas); isso reduz, mas não elimina, o risco de prompt injection.
 
 ### Avaliação
 
-`eval/dataset.json` tem 8 perguntas escritas à mão, com arquivos esperados, sobre `eval/fixture_repo`; respostas geradas nunca são usadas como verdade de referência. Resultado medido (arquivo `eval/results.json`, CPU, all-MiniLM-L6-v2): **hit@3 = 1,00**, **validade das citações = 1,00**, latência de busca média 17,05 ms / mediana 16,07 ms / máx. 22,16 ms. O conjunto é pequeno e o fixture simples: serve como teste de regressão, não como afirmação geral de qualidade. Comandos: veja a seção em inglês.
+`eval/dataset.json` tem 12 perguntas escritas à mão sobre `eval/fixture_repo` (7 de um arquivo, 3 multiarquivo, 2 sem evidência), com arquivos e fatos esperados. Medido offline (embedder hashing, `eval/results.json`): 10 perguntas respondíveis, **hit@3 = 1,00, hit@5 = 1,00**, validade das citações 1,00 — baseline lexical em fixture pequeno, não uma afirmação geral de qualidade.
+
+A avaliação generativa (`python -m repolens.rag_evaluation`) mede acurácia por fatos escritos à mão, suporte lexical das afirmações, validade das citações, abstenção, latência, tokens e custo estimado, sem LLM como juiz. Chamadas reais exigem `--allow-live` e limite rígido (`--max-calls`, padrão 12); as respostas são gravadas para `--mode replay` offline. Veja [docs/reports/GEMINI_RAG_EVALUATION.md](docs/reports/GEMINI_RAG_EVALUATION.md).
 
 ### Testes
 
@@ -169,7 +193,7 @@ O CI roda lint, testes, avaliação offline e build do Docker em cada Pull Reque
 - A detecção de segredos é por padrões e pode falhar.
 - Uma reindexação só substitui a geração ativa quando a nova geração está completa.
 - O limiar de similaridade (padrão 0,25) é heurístico.
-- A avaliação cobre só a recuperação em um fixture pequeno; a qualidade das respostas do LLM não é medida.
+- Fixture pequeno; métricas generativas são lexicais (sem juiz LLM) e o resultado live do Gemini depende da disponibilidade do provedor (veja o relatório).
 
 ## License
 

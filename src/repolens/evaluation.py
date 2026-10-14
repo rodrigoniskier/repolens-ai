@@ -1,4 +1,4 @@
-"""Deterministic retrieval evaluation: hit@3, latency and citation validity.
+"""Deterministic retrieval evaluation: hit@3, hit@5, latency and citation validity.
 
 Ground truth is the hand-written eval/dataset.json; no generated answers are used.
 Run: python -m repolens.evaluation [--embedder hashing|model]
@@ -11,6 +11,8 @@ import statistics
 import subprocess  # noqa: S404
 import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from repolens.citations import verify_citation
@@ -36,40 +38,58 @@ def _commit_fixture(src: Path, dest: Path) -> str:
     return sha
 
 
-def run_evaluation(embedder: Embedder, eval_dir: Path = DEFAULT_EVAL_DIR, k: int = 3) -> dict:
-    questions = json.loads((eval_dir / "dataset.json").read_text("utf-8"))["questions"]
+@contextmanager
+def fixture_service(
+    embedder: Embedder, eval_dir: Path = DEFAULT_EVAL_DIR, **settings_overrides
+) -> Iterator[tuple[RepoLensService, Path, str]]:
+    """Index the fixture repo into a throwaway store; yields (service, checkout root, commit)."""
     with tempfile.TemporaryDirectory(prefix="repolens-eval-") as tmp:
         tmp_path = Path(tmp)
         root = tmp_path / "fixture"
         sha = _commit_fixture(eval_dir / "fixture_repo", root)
-        settings = Settings(data_dir=tmp_path / "data", _env_file=None)  # type: ignore[call-arg]
+        settings = Settings(data_dir=tmp_path / "data", _env_file=None, **settings_overrides)  # type: ignore[call-arg]
         service = RepoLensService(settings, VectorStore(tmp_path / "chroma", embedder))
         service.ingest_directory(root, repo=FIXTURE_REPO, commit=sha)
+        yield service, root, sha
 
+
+def load_questions(eval_dir: Path = DEFAULT_EVAL_DIR) -> list[dict]:
+    return json.loads((eval_dir / "dataset.json").read_text("utf-8"))["questions"]
+
+
+def run_evaluation(embedder: Embedder, eval_dir: Path = DEFAULT_EVAL_DIR, k: int = 3) -> dict:
+    """Retrieval metrics. hit@k only counts answerable questions (those with expected paths)."""
+    questions = load_questions(eval_dir)
+    depth = max(k, 5)
+    with fixture_service(embedder, eval_dir) as (service, root, sha):
         rows = []
         for q in questions:
             start = time.perf_counter()
-            hits = service.store.search(q["question"], k, FIXTURE_REPO)
+            hits = service.store.search(q["question"], depth, FIXTURE_REPO)
             latency_ms = (time.perf_counter() - start) * 1000
             expected = set(q["expected_paths"])
+            paths = [h.chunk.path for h in hits]
             rows.append(
                 {
                     "id": q["id"],
-                    "hit": any(h.chunk.path in expected for h in hits),
+                    "hit": any(p in expected for p in paths[:k]) if expected else None,
+                    "hit@5": any(p in expected for p in paths[:5]) if expected else None,
                     "latency_ms": round(latency_ms, 2),
                     "citations": len(hits),
                     "valid_citations": sum(verify_citation(root, h.chunk, sha) for h in hits),
-                    "top_paths": [h.chunk.path for h in hits],
+                    "top_paths": paths[:k],
                 }
             )
 
-    n = len(rows)
+    scored = [r for r in rows if r["hit"] is not None]
     total_citations = sum(r["citations"] for r in rows)
     latencies = sorted(r["latency_ms"] for r in rows)
     return {
         "embedder": embedder.name,
-        "questions": n,
-        f"hit@{k}": round(sum(r["hit"] for r in rows) / n, 4),
+        "questions": len(rows),
+        "answerable_questions": len(scored),
+        f"hit@{k}": round(sum(r["hit"] for r in scored) / len(scored), 4),
+        "hit@5": round(sum(r["hit@5"] for r in scored) / len(scored), 4),
         "citation_validity": round(sum(r["valid_citations"] for r in rows) / total_citations, 4)
         if total_citations
         else 0.0,

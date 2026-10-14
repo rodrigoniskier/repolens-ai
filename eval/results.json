@@ -1,108 +1,170 @@
 {
-  "embedder": "sentence-transformers/all-MiniLM-L6-v2",
-  "questions": 8,
+  "embedder": "hashing-8192",
+  "questions": 12,
+  "answerable_questions": 10,
   "hit@3": 1.0,
+  "hit@5": 1.0,
   "citation_validity": 1.0,
   "latency_ms": {
-    "mean": 17.05,
-    "median": 16.07,
-    "max": 22.16
+    "mean": 4.67,
+    "median": 4.31,
+    "max": 8.03
   },
   "per_question": [
     {
       "id": "q1",
       "hit": true,
-      "latency_ms": 22.16,
-      "citations": 3,
-      "valid_citations": 3,
+      "hit@5": true,
+      "latency_ms": 8.03,
+      "citations": 5,
+      "valid_citations": 5,
       "top_paths": [
         "auth/tokens.py",
         "README.md",
-        "docs/deploy.md"
+        "billing/invoice.py"
       ]
     },
     {
       "id": "q2",
       "hit": true,
-      "latency_ms": 18.7,
-      "citations": 3,
-      "valid_citations": 3,
+      "hit@5": true,
+      "latency_ms": 4.45,
+      "citations": 5,
+      "valid_citations": 5,
       "top_paths": [
-        "billing/invoice.py",
         "README.md",
-        "cache/lru.py"
+        "billing/invoice.py",
+        "auth/tokens.py"
       ]
     },
     {
       "id": "q3",
       "hit": true,
-      "latency_ms": 14.98,
-      "citations": 3,
-      "valid_citations": 3,
+      "hit@5": true,
+      "latency_ms": 3.71,
+      "citations": 5,
+      "valid_citations": 5,
       "top_paths": [
         "billing/invoice.py",
-        "README.md",
-        "cache/lru.py"
+        "cache/lru.py",
+        "README.md"
       ]
     },
     {
       "id": "q4",
       "hit": true,
-      "latency_ms": 15.3,
-      "citations": 3,
-      "valid_citations": 3,
+      "hit@5": true,
+      "latency_ms": 3.8,
+      "citations": 5,
+      "valid_citations": 5,
       "top_paths": [
         "cache/lru.py",
         "README.md",
-        "utils/retry.py"
+        "billing/invoice.py"
       ]
     },
     {
       "id": "q5",
       "hit": true,
-      "latency_ms": 17.41,
-      "citations": 3,
-      "valid_citations": 3,
+      "hit@5": true,
+      "latency_ms": 3.79,
+      "citations": 5,
+      "valid_citations": 5,
       "top_paths": [
         "utils/retry.py",
         "README.md",
-        "cache/lru.py"
+        "auth/tokens.py"
       ]
     },
     {
       "id": "q6",
       "hit": true,
-      "latency_ms": 16.23,
-      "citations": 3,
-      "valid_citations": 3,
+      "hit@5": true,
+      "latency_ms": 3.79,
+      "citations": 5,
+      "valid_citations": 5,
       "top_paths": [
         "docs/deploy.md",
-        "utils/retry.py",
-        "cache/lru.py"
+        "README.md",
+        "auth/tokens.py"
       ]
     },
     {
       "id": "q7",
       "hit": true,
-      "latency_ms": 15.91,
-      "citations": 3,
-      "valid_citations": 3,
+      "hit@5": true,
+      "latency_ms": 4.54,
+      "citations": 5,
+      "valid_citations": 5,
       "top_paths": [
         "docs/deploy.md",
-        "README.md",
-        "cache/lru.py"
+        "auth/tokens.py",
+        "README.md"
       ]
     },
     {
       "id": "q8",
       "hit": true,
-      "latency_ms": 15.7,
-      "citations": 3,
-      "valid_citations": 3,
+      "hit@5": true,
+      "latency_ms": 4.69,
+      "citations": 5,
+      "valid_citations": 5,
+      "top_paths": [
+        "auth/tokens.py",
+        "README.md",
+        "billing/invoice.py"
+      ]
+    },
+    {
+      "id": "q9",
+      "hit": true,
+      "hit@5": true,
+      "latency_ms": 6.04,
+      "citations": 5,
+      "valid_citations": 5,
+      "top_paths": [
+        "utils/retry.py",
+        "README.md",
+        "cache/lru.py"
+      ]
+    },
+    {
+      "id": "q10",
+      "hit": true,
+      "hit@5": true,
+      "latency_ms": 5.08,
+      "citations": 5,
+      "valid_citations": 5,
+      "top_paths": [
+        "auth/tokens.py",
+        "README.md",
+        "billing/invoice.py"
+      ]
+    },
+    {
+      "id": "q11",
+      "hit": null,
+      "hit@5": null,
+      "latency_ms": 3.91,
+      "citations": 5,
+      "valid_citations": 5,
       "top_paths": [
         "README.md",
+        "docs/deploy.md",
+        "billing/invoice.py"
+      ]
+    },
+    {
+      "id": "q12",
+      "hit": null,
+      "hit@5": null,
+      "latency_ms": 4.17,
+      "citations": 5,
+      "valid_citations": 5,
+      "top_paths": [
         "auth/tokens.py",
-        "docs/deploy.md"
+        "README.md",
+        "billing/invoice.py"
       ]
     }
   ]
